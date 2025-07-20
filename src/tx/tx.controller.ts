@@ -73,6 +73,15 @@ export class TxController {
         return this.cryptoService.generateWallet();
     }
 
+    @Get('/all-accounts')
+    getAllAccounts() {
+        return this.txService.getAllAccounts();
+    }
+    @Get('/system-balance')
+    getAccountsBalance() {
+        return this.txService.getSystemBalance();
+    }
+
     @Post('/sign')
     signTx(@Body() body: TxSignDto) {
         return this.cryptoService.sign(body);

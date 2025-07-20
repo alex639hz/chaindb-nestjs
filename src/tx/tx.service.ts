@@ -151,8 +151,15 @@ export class TxService {
 		const { fetchedBalance } = await this.getBalance(parsedTx.sender);
 		const balance = fetchedBalance.totalBalanceAcc.totalBalance
 		const prevTxHash = fetchedBalance.lastTxHash
-		const txCount = fetchedBalance.count + 1
+		const txCount = fetchedBalance.lastTxCount + 1
 		const errorMsg = ''
+		const txMeta = {
+			tx: parsedTx,
+			senderBalance: balance,
+			txHash: await this.hash(receivedTx.txRawJson),
+			prevTxHash,
+			txCount,
+		}
 		// const { errorMsg, balance, prevTxHash, txCount } = fetchedBalance.totalBalanceAcc
 
 		//-verify tx--------------------------------------------
@@ -186,13 +193,7 @@ export class TxService {
 
 			const txDocToSave: TypeTxDoc = {
 				txRaw: receivedTx,
-				txMeta: {
-					tx,
-					senderBalance: balance,
-					txHash,
-					prevTxHash,
-					txCount,
-				}
+				txMeta,
 			}
 			const txDoc = new this.txCollection(txDocToSave);
 			await txDoc.save();
@@ -205,6 +206,10 @@ export class TxService {
 
 	async hash(message) {
 		const hash = txlib.hash(message)
+		return await Promise.resolve(hash);
+	}
+	async getAddressFromPublic(publicKey) {
+		const hash = this.hash(publicKey)
 		return await Promise.resolve(hash);
 	}
 	// async txVerify(createTxDto: CreateTxDto): Promise<TxDocument> {}
@@ -376,6 +381,7 @@ export class TxService {
 						}
 					},
 					count: { $sum: 1 },
+					lastTxCount: { $last: "$txMeta.txCount" },
 					lastTxHash: { $last: "$txMeta.txHash" },
 					lastTxId: { $last: "$_id" },
 					txIds: { $push: "$_id" },
@@ -386,6 +392,7 @@ export class TxService {
 					_id: 0,
 					lastTxId: 1,
 					lastTxHash: 1,
+					lastTxCount: 1,
 					count: 1,
 					hashAcc: 1,
 					dateAcc: 1,
@@ -400,11 +407,34 @@ export class TxService {
 		return tx['0']
 	}
 
+	async getAllAccounts(): Promise<any> {
+		const pipeline = [
+			{
+				$project: {
+					receiver: "$txMeta.tx.receiver"
+				}
+			},
+			{
+				$group: {
+					_id: "$receiver"
+				}
+			}
+		];
+
+		const result = await this.txCollection.aggregate(pipeline);
+		return result.map(obj => obj._id);
+	}
+
+	async getSystemBalance(): Promise<any> {
+		const addressList = await this.getAllAccounts();
+		const results = await Promise.all(addressList.map(address => this.fetchBalance(address)));
+		const sums = [...results].map(obj => obj.totalBalanceAcc.totalBalance);
+		return sums.reduce((a, b) => a + b, 0);
+	}
+
 	async fetchTxsByList(addressList: string[]) {
 		const tx = await this.txCollection.find({ _id: { $in: addressList } });
 		// return txs.map(tx => tx.toObject());
 		return tx
 	}
-
 }
-

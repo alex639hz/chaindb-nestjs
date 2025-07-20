@@ -122,7 +122,12 @@ export const getTimeStamp = () => new Date().toISOString();
 
 export const strToBaseEncoding = () => new Date().toISOString();
 export const baseToStrDecoding = () => new Date().toISOString();
-
+export const publicKeyToAddress = (publicKey: string): string => {
+  const hash = crypto.createHash('keccak256');
+  hash.update(publicKey);
+  const address = hash.digest().slice(-20);
+  return `0x${address.toString('hex')}`;
+};
 
 export const txlib = {
   isVerifyTxRawSignature,
