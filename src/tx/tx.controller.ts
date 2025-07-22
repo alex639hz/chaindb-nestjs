@@ -43,6 +43,11 @@ export class TxController {
     // @HttpCode(HttpStatus.OK)
     // @ApiOperation({title: 'Get All article',})
     // @ApiOkResponse({})
+    @Get('/test')
+    async test(): Promise<any> {
+        return await this.txService.test();
+    }
+
     @Get('/demo')
     async demo(): Promise<any> {
         return await this.txService.demo();

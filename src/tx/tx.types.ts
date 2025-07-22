@@ -7,7 +7,8 @@ export type TypeTxParsed = {
   sender: string;
   receiver: string;
   amount: number;
-  date: string;
+  lastTxHash: string;
+  message: string;
 };
 
 export type TypeTxDoc = {
@@ -20,7 +21,6 @@ export type TypeTxHash = string;
 
 export type TypeTxMeta = {
   tx: TypeTxParsed;
-  senderBalance: number;
   txHash: TypeTxHash;
   prevTxHash: TypeTxHash;
   txCount: number;
