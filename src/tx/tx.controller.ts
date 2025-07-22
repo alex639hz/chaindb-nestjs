@@ -36,6 +36,10 @@ export class TxController {
         return await this.txService.getAllTxs();
     }
 
+    @Post()
+    async createTx(@Body() createTxDto: CreateTxDto) {
+        return await this.txService.txCreate(createTxDto);
+    }
     // @HttpCode(HttpStatus.OK)
     // @ApiOperation({title: 'Get All article',})
     // @ApiOkResponse({})
@@ -59,15 +63,11 @@ export class TxController {
         return await this.txService.getBalance(address);
     }
 
-    @Post()
-    async createTx(@Body() createTxDto: CreateTxDto) {
-        return await this.txService.txCreate(createTxDto);
-    }
-
     @Get('/generate-account')
     generateAccount() {
         return this.cryptoService.generateKeyPair();
     }
+
     @Get('/generate-wallet')
     generateWallet() {
         return this.cryptoService.generateWallet();
@@ -77,6 +77,7 @@ export class TxController {
     getAllAccounts() {
         return this.txService.getAllAccounts();
     }
+
     @Get('/system-balance')
     getAccountsBalance() {
         return this.txService.getSystemBalance();
@@ -90,6 +91,11 @@ export class TxController {
     @Post('/verify')
     encrypt(@Body() body) {
         return this.cryptoService.verify(body);
+    }
+
+    @Get('/jwt')
+    jwt() {
+        return this.txService.JwtTest();
     }
 
     // @Get(':id')

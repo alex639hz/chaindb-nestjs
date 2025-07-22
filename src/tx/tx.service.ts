@@ -10,6 +10,7 @@ import { CreateTxDto } from './dto/create-tx.dto';
 import { txlib } from './tx.lib';
 import * as txDemo from './txdemo-2.json';
 import { TypeTxDoc, TypeTxParsed, TypeTxRaw } from './tx.types';
+import { JwtService } from 'src/jwt/jwt.service';
 
 enum ERRORS {
 	TX_NOTVERIFIED_MSGSIG = 'TX_NOTVERIFIED_MSGSIG',
@@ -436,5 +437,17 @@ export class TxService {
 		const tx = await this.txCollection.find({ _id: { $in: addressList } });
 		// return txs.map(tx => tx.toObject());
 		return tx
+	}
+	JwtTest() {
+
+		const jwtService = new JwtService();
+
+		const token = jwtService.signToken({ userId: '123', role: 'admin' });
+
+		console.log('JWT:', token);
+
+		const decoded = jwtService.verifyToken(token);
+		console.log('Decoded:', decoded);
+
 	}
 }
