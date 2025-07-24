@@ -25,8 +25,10 @@ export const TxSchema = new mongoose.Schema({
             receiver: String,
             amount: Number,
             date: String,
+            totalBalance: Number,
+            txCount: Number,
+            lastTxHash: String,
         },
-        senderBalance: Number,
         txHash: {
             type: String,
             index: true,

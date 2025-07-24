@@ -9,7 +9,7 @@ import { Tx as TxDocument } from './interfaces/tx.interface';
 import { CreateTxDto } from './dto/create-tx.dto';
 import { publicKeyToAddress, txlib } from './tx.lib';
 import * as txDemo from './txdemo-2.json';
-import { TypeTxDoc, TypeTxParsed, TypeTxRaw } from './tx.types';
+import { TypeTxFetchBalance, TypeTxDoc, TypeTxParsed, TypeTxRaw } from './tx.types';
 import { JwtService } from 'src/jwt/jwt.service';
 
 enum ERRORS {
@@ -24,15 +24,6 @@ export class TxService {
 		@InjectModel('Tx') private readonly txCollection: Model<TxDocument>,
 	) { }
 
-
-
-
-
-
-
-
-
-
 	async test(): Promise<any> {
 		return 'hello test'
 	}
@@ -41,7 +32,7 @@ export class TxService {
 
 		//----------------------------
 		const txDemo1 = txDemo[0];
-		await this.deleteAllTxs()
+		// await this.deleteAllTxs()
 		return await this.createInitTx(txDemo1)
 	}
 
@@ -62,19 +53,10 @@ export class TxService {
 		return arr;
 	}
 
-	verifyTxs(receivedTx: TypeTxRaw) {
-		if (!txlib.isVerifyTxRawSignature(receivedTx)) {
-			// isTxVerified = false
-			// throw new Error(ERRORS.TX_NOTVERIFIED_MSGSIG);
-		}
-	}
-
-	async getBalance(address: string, shouldVerifyTx = true): Promise<any> {
+	async getBalance(address: string, shouldVerifyTx = true): Promise<TypeTxFetchBalance> {
 		const fetchedBalance = await this.fetchBalance(address)
 
-		return {
-			fetchedBalance: fetchedBalance ?? { errorMsg: '', balance: 0, prevTxHash: '', txCount: 0 },
-		}
+		return fetchedBalance
 	}
 
 	async txCreate(createTxDto: CreateTxDto): Promise<any> {
@@ -94,10 +76,16 @@ export class TxService {
 			amount
 		} = _tx;
 
-		const tx = {
-			sender: publicKeyToAddress(senderPublicKey),
+		const sender = publicKeyToAddress(senderPublicKey);
+		const res = await this.getBalance(sender, false)
+
+		const tx: TypeTxParsed = {
+			sender,
 			receiver: publicKeyToAddress(receiverPublicKey),
 			amount: amount,
+			txCount: (res?.count || 0) + 1,
+			totalBalance: (res?.totalBalanceAcc?.totalBalance || 0),
+			lastTxHash: res?.lastTxHash,
 			date: txlib.getTimeStamp(),
 		};
 		const { signature, txJson: txRawJson } = txlib.signTx({
@@ -106,23 +94,16 @@ export class TxService {
 		});
 
 		// receivedTx is the final object sent to the server
-		const receivedTx: TypeTxRaw = {
+		const txRaw: TypeTxRaw = {
 			publicKey: senderPublicKey,
 			signature,
 			txRawJson,
 		}
-		return await Promise.resolve(receivedTx);
+		return await Promise.resolve(txRaw);
 	}
 
 
-	async txCreateRaw(_tx: any, shouldVerifyTx: boolean): Promise<any> {
-
-		//-client-side demo-------------------------------------
-		//--------create and sign tx----------------------------
-		//------------------------------------------------------      
-
-		const txRaw = await this.txRawPrepare(_tx)
-
+	async txValidate(txRaw: TypeTxRaw, shouldVerifyTx = true): Promise<[boolean, TypeTxDoc]> {
 
 
 		//-server-side demo-----(receivedTx)--------------------
@@ -139,6 +120,7 @@ export class TxService {
 			txHash: await this.hash(txRaw.txRawJson),
 			prevTxHash,
 			txCount,
+			totalBalance: balance
 		}
 		// const { errorMsg, balance, prevTxHash, txCount } = fetchedBalance.totalBalanceAcc
 
@@ -163,38 +145,35 @@ export class TxService {
 		//-create parsedTx in db--------------------------------
 		//------------------------------------------------------
 		//------------------------------------------------------
-		if (isTxVerified) {
-			console.log(`${parsedTx.sender} -> ${parsedTx.receiver}: ${parsedTx.amount}/${balance}`);
+		// if (isTxVerified) {
+		// console.log(`${parsedTx.sender} -> ${parsedTx.receiver}: ${parsedTx.amount}/${balance}`);
 
-			const txDocToSave: TypeTxDoc = {
-				txRaw: txRaw,
-				txMeta,
-			}
+		const txDocToSave: TypeTxDoc = {
+			txRaw,
+			txMeta,
+		}
+		// const txDoc = new this.txCollection(txDocToSave);
+		// await txDoc.save();
+		// return txDoc.toObject();
+
+		// } else {
+		// console.log(`${parsedTx.sender} -> ${parsedTx.receiver}: ${parsedTx.amount}/${balance} failed:${errorMsg || ERRORS.TX_NOTVERIFIED_PAYLOAD}`);
+		// }
+
+		return [isTxVerified, txDocToSave]
+
+	}
+
+	async txCreateRaw(_tx: any, shouldVerifyTx: boolean): Promise<any> {
+
+		const txRaw = await this.txRawPrepare(_tx)
+		const [isTxVerified, txDocToSave] = await this.txValidate(txRaw)
+		if (isTxVerified) {
 			const txDoc = new this.txCollection(txDocToSave);
 			await txDoc.save();
-			return txDoc.toObject();
-
-		} else {
-			console.log(`${parsedTx.sender} -> ${parsedTx.receiver}: ${parsedTx.amount}/${balance} failed:${errorMsg || ERRORS.TX_NOTVERIFIED_PAYLOAD}`);
+			return txDoc.toObject()
 		}
-	}
-
-	async hash(message) {
-		const hash = txlib.hash(message)
-		return await Promise.resolve(hash);
-	}
-	async getAddressFromPublic(publicKey) {
-		const hash = this.hash(publicKey)
-		return await Promise.resolve(hash);
-	}
-	// async txVerify(createTxDto: CreateTxDto): Promise<TxDocument> {}
-
-	async getAllTxs(): Promise<TxDocument[]> {
-		return await this.txCollection.find({});
-	}
-
-	async deleteAllTxs(): Promise<void> {
-		await this.txCollection.deleteMany({});
+		return txDocToSave
 	}
 
 	async createInitTx({
@@ -203,20 +182,28 @@ export class TxService {
 		receiverPublicKey,
 	}) {
 
-		const parsedTx: TypeTxParsed = {
+		const amountToAdd = 100
+		const sender = 'SYSTEM'
+		const fetched = await this.getBalance(sender); // { errorMsg, balance, count, lastTxHash }
+		const newTxCount = (fetched?.count || 0) + 1;
+		const lastTxHash = fetched?.lastTxHash || 'INIT'
+
+		const initTx: TypeTxParsed = {
 			sender: 'SYSTEM',
-			lastTxHash: 'SYSTEM',
+			receiver: publicKeyToAddress(receiverPublicKey),
+			amount: amountToAdd,
+			txCount: newTxCount,
+			totalBalance: fetched?.totalBalanceAcc?.totalBalance || 0,
 			message: 'SYSTEM',
-			receiver: publicKeyToAddress(senderPublicKey),
-			amount: 100,
+			lastTxHash,
+			date: txlib.getTimeStamp(),
 		}
 
 		const { signature, txJson: txRawJson } = txlib.signTx({
-			tx: parsedTx,
+			tx: initTx,
 			privateKey: senderPrivateKey
 		});
 
-		const { errorMsg, balance, txCount } = await this.getBalance(parsedTx.sender);
 		const txHash = await this.hash(txRawJson)
 
 
@@ -227,10 +214,10 @@ export class TxService {
 				publicKey: senderPublicKey
 			},
 			txMeta: {
-				tx: parsedTx,
+				tx: initTx,
 				txHash,
-				prevTxHash: 'undefined',
-				txCount,
+				prevTxHash: lastTxHash || 'undefined',
+				txCount: newTxCount,
 			}
 		}
 		const txDoc = new this.txCollection(txDocToSave);
@@ -239,6 +226,25 @@ export class TxService {
 
 
 	}
+
+	async hash(message) {
+		const hash = txlib.hash(message)
+		return await Promise.resolve(hash);
+	}
+
+	async getAddressFromPublic(publicKey) {
+		const hash = this.hash(publicKey)
+		return await Promise.resolve(hash);
+	}
+
+	async getAllTxs(): Promise<TxDocument[]> {
+		return await this.txCollection.find({});
+	}
+
+	async deleteAllTxs(): Promise<void> {
+		await this.txCollection.deleteMany({});
+	}
+
 	async verifySenderBalance({ tx }) { }
 
 	async fetchTxHistory(address: string, sort = {}): Promise<any> {
@@ -258,18 +264,7 @@ export class TxService {
 		return txs.map(tx => tx.toObject());
 	}
 
-	async fetchBalance(address: string): Promise<{
-		_id: any;
-		lastTxId: any;
-		lastTxHash: any;
-		lastTxCount: any;
-		count: any;
-		hashAcc: any;
-		dateAcc: any;
-		totalBalance: any;
-		totalBalanceAcc: any;
-		txIds: any;
-	}> {
+	async fetchBalance(address: string): Promise<TypeTxFetchBalance> {
 		const tx = await this.txCollection.aggregate([
 			{
 				$match: {

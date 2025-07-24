@@ -7,8 +7,11 @@ export type TypeTxParsed = {
   sender: string;
   receiver: string;
   amount: number;
+  txCount: number;
+  totalBalance: string;
+  message?: string;
   lastTxHash: string;
-  message: string;
+  date?: string;
 };
 
 export type TypeTxDoc = {
@@ -25,3 +28,16 @@ export type TypeTxMeta = {
   prevTxHash: TypeTxHash;
   txCount: number;
 };
+
+export type TypeTxFetchBalance = {
+  _id: any;
+  lastTxId: any;
+  lastTxHash: any;
+  lastTxCount: any;
+  count: number;
+  hashAcc: any;
+  dateAcc: any;
+  totalBalance: any;
+  totalBalanceAcc: any;
+  txIds: any;
+}
